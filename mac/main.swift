@@ -1,8 +1,8 @@
 // Snapperr for Mac: snap windows with the keyboard. Menu bar app (no Dock icon).
 // Build: bash mac/build.sh (on a Mac, needs Xcode command line tools).
 //
-// Double-tap Control  -> snap mode on for 10 s (voice says "Snap on")
-// Triple-tap Control  -> asks how many columns (2-9), then snap mode on
+// Double-tap Control  -> snap mode on for 10 s (soft sound + tiny counter)
+// Triple-tap Control  -> column picker (2-9, arrows + Enter), then snap mode on
 // In snap mode (each key restarts the 10 s, Esc or double-tap Control ends it):
 //   Control+Left/Down/Right  thirds, Control+L / Control+; halves
 //   Control+Shift+Arrow      move 20 px, Control+Shift+Option+Arrow  resize 20 px
@@ -11,7 +11,6 @@
 
 import AppKit
 import ApplicationServices
-import AVFoundation
 import Carbon.HIToolbox
 import CryptoKit
 import ServiceManagement
@@ -193,50 +192,171 @@ final class TapDetector {
     }
 }
 
-// MARK: - Popup that shows snap mode is on (never takes focus, clicks pass through)
+// MARK: - Look and sound
+
+func rgb(_ hex: Int, _ alpha: CGFloat = 1) -> NSColor {
+    NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
+}
+
+/// Soft built-in macOS sounds: Tink = snap on, Purr = column picker, Pop = off.
+func chime(_ name: String) {
+    guard let sound = NSSound(named: name)?.copy() as? NSSound else { return }
+    sound.volume = 0.5
+    sound.play()
+}
+
+/// Screen that holds the focused window (or the main screen).
+func activeScreen() -> NSScreen {
+    if let w = WindowMover.focusedWindow(), let f = WindowMover.frame(of: w) { return WindowMover.screen(for: f) }
+    return NSScreen.main ?? NSScreen.screens[0]
+}
+
+// MARK: - Tiny counter that shows snap mode is on (never takes focus, clicks pass through)
 
 final class Badge {
     private let panel: NSPanel
-    private let headline = NSTextField(labelWithString: "Snap on")
-    private let hint = NSTextField(labelWithString: "")
+    private let label = NSTextField(labelWithString: "")
 
     init() {
-        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 280, height: 58),
+        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 104, height: 22),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.ignoresMouseEvents = true
+        panel.alphaValue = 0.8
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-        let box = NSView(frame: panel.contentRect(forFrameRect: panel.frame))
+        let box = NSView(frame: NSRect(x: 0, y: 0, width: 104, height: 22))
         box.wantsLayer = true
-        box.layer?.backgroundColor = NSColor(red: 0.04, green: 0.42, blue: 0.29, alpha: 0.96).cgColor
-        box.layer?.cornerRadius = 14
-        headline.font = .boldSystemFont(ofSize: 15)
-        headline.textColor = .white
-        hint.font = .systemFont(ofSize: 11)
-        hint.textColor = NSColor(red: 0.82, green: 0.98, blue: 0.90, alpha: 1)
-        for (label, y) in [(headline, 28.0), (hint, 9.0)] {
-            label.alignment = .center
-            label.frame = NSRect(x: 8, y: y, width: 264, height: 20)
-            box.addSubview(label)
-        }
+        box.layer?.backgroundColor = rgb(0x0B2E22).cgColor
+        box.layer?.cornerRadius = 11
+        label.font = .systemFont(ofSize: 11)
+        label.textColor = rgb(0x86EFAC)
+        label.alignment = .center
+        label.frame = NSRect(x: 4, y: 3, width: 96, height: 15)
+        box.addSubview(label)
         panel.contentView = box
     }
 
     func update(secondsLeft: Int, columns: Int) {
-        headline.stringValue = "Snap on  ·  \(secondsLeft) s"
-        hint.stringValue = columns > 0 ? "⌃1 to ⌃\(columns) = column  ·  Esc = off" : "⌃ + arrows  ·  Esc = off"
+        label.stringValue = (columns > 0 ? "● \(columns) cols  " : "● snap  ") + String(secondsLeft)
     }
 
     func show() {
-        var screen = NSScreen.main ?? NSScreen.screens[0]
-        if let w = WindowMover.focusedWindow(), let f = WindowMover.frame(of: w) { screen = WindowMover.screen(for: f) }
-        let area = screen.visibleFrame
-        panel.setFrameOrigin(NSPoint(x: area.midX - panel.frame.width / 2, y: area.maxY - panel.frame.height - 24))
+        let area = activeScreen().visibleFrame
+        panel.setFrameOrigin(NSPoint(x: area.midX - panel.frame.width / 2, y: area.maxY - panel.frame.height - 8))
         panel.orderFrontRegardless()
+    }
+
+    func hide() { panel.orderOut(nil) }
+}
+
+// MARK: - Column picker (triple-tap Control): list 2...9, starts on 4
+
+/// A panel that can take key presses without bringing Snapperr to the front,
+/// so the window you want to snap stays the active one.
+final class KeyPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+final class PickerView: NSView {
+    static let width: CGFloat = 220, top: CGFloat = 36, rowHeight: CGFloat = 32, bottom: CGFloat = 32
+    static var height: CGFloat { top + 8 * rowHeight + bottom }
+    var value = 4 { didSet { needsDisplay = true } }
+    var onChoose: (Int) -> Void = { _ in }
+    var onCancel: () -> Void = {}
+
+    override var acceptsFirstResponder: Bool { true }
+    override var isFlipped: Bool { true }
+
+    private func text(_ s: String, x: CGFloat? = nil, y: CGFloat, size: CGFloat, bold: Bool = false, color: NSColor) {
+        let attrs: [NSAttributedString.Key: Any] = [.font: bold ? NSFont.boldSystemFont(ofSize: size) : NSFont.systemFont(ofSize: size),
+                                                    .foregroundColor: color]
+        let str = s as NSString
+        let w = str.size(withAttributes: attrs).width
+        str.draw(at: NSPoint(x: x ?? (bounds.width - w) / 2, y: y), withAttributes: attrs)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        rgb(0x0B1A14).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 14, yRadius: 14).fill()
+        text("Columns", y: 11, size: 12, color: rgb(0x6EE7B7))
+        for n in 2...9 {
+            let row = NSRect(x: 10, y: Self.top + CGFloat(n - 2) * Self.rowHeight, width: bounds.width - 20, height: Self.rowHeight - 3)
+            let on = n == value
+            if on {
+                rgb(0x10B981).setFill()
+                NSBezierPath(roundedRect: row, xRadius: 8, yRadius: 8).fill()
+            }
+            let fg = on ? rgb(0x04130C) : rgb(0xD1FAE5)
+            text("\(n)", x: row.minX + 18, y: row.minY + 5, size: 14, bold: on, color: fg)
+            fg.setFill()
+            for i in 0..<n {
+                NSBezierPath(roundedRect: NSRect(x: row.minX + 54 + CGFloat(i) * 13, y: row.midY - 7, width: 9, height: 14),
+                             xRadius: 2, yRadius: 2).fill()
+            }
+        }
+        text("↑ ↓ choose   ·   Enter   ·   Esc", y: Self.top + 8 * Self.rowHeight + 8, size: 10, color: rgb(0x5F8F7A))
+    }
+
+    override func keyDown(with event: NSEvent) {
+        switch Int(event.keyCode) {
+        case kVK_UpArrow: value = max(2, value - 1)
+        case kVK_DownArrow: value = min(9, value + 1)
+        case kVK_Return, kVK_ANSI_KeypadEnter: onChoose(value)
+        case kVK_Escape: onCancel()
+        default:
+            if let c = event.charactersIgnoringModifiers, let n = Int(c), (2...9).contains(n) {
+                value = n
+                onChoose(n)
+            } else {
+                super.keyDown(with: event)
+            }
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        let i = Int(((p.y - Self.top) / Self.rowHeight).rounded(.down))
+        if (0...7).contains(i) {
+            value = i + 2
+            onChoose(value)
+        }
+    }
+}
+
+final class ColumnPicker {
+    private let panel: KeyPanel
+    private let view: PickerView
+    var onPick: (Int) -> Void = { _ in }
+
+    init() {
+        let frame = NSRect(x: 0, y: 0, width: PickerView.width, height: PickerView.height)
+        panel = KeyPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.level = .floating
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        view = PickerView(frame: frame)
+        panel.contentView = view
+        view.onChoose = { [weak self] n in self?.hide(); self?.onPick(n) }
+        view.onCancel = { [weak self] in self?.hide() }
+        // Clicking somewhere else closes it, like a drop-down.
+        NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
+            self?.hide()
+        }
+    }
+
+    func show() {
+        view.value = 4
+        let area = activeScreen().visibleFrame
+        panel.setFrameOrigin(NSPoint(x: area.midX - PickerView.width / 2, y: area.midY - PickerView.height / 2))
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(view)
     }
 
     func hide() { panel.orderOut(nil) }
@@ -349,7 +469,7 @@ enum Updater {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let badge = Badge()
-    private let voice = AVSpeechSynthesizer()
+    private let picker = ColumnPicker()
     private var tapDetector: TapDetector?
     private var snapOn = false
     private var secondsLeft = 0
@@ -369,7 +489,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tapDetector = TapDetector { [weak self] taps in
             guard let self else { return }
             if taps == 2 { self.snapOn ? self.endSnapMode() : self.startSnapMode() }
-            else if taps >= 3 { self.askColumns() }
+            else if taps >= 3 { self.showPicker() }
         }
 
         setUpLoginItemOnce()
@@ -418,7 +538,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert("Snapperr \(appVersion) shortcuts", """
         Turn on snap mode first:
           Double-tap Control   snap mode on for 10 seconds
-          Triple-tap Control   choose how many columns, then snap mode on
+          Triple-tap Control   pick how many columns (arrows + Enter)
           Esc                  snap mode off
 
         Then:
@@ -446,12 +566,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: snap mode
 
-    private func startSnapMode(say text: String = "Snap on") {
+    private func startSnapMode(sound: String? = "Tink") {
         guard AXIsProcessTrusted() else { askForAccessibility(); return }
         snapOn = true
         registerSnapKeys()
-        voice.stopSpeaking(at: .immediate)
-        voice.speak(AVSpeechUtterance(string: text))
+        if let sound { chime(sound) }
         secondsLeft = snapSeconds
         badge.update(secondsLeft: secondsLeft, columns: columns)
         badge.show()
@@ -469,7 +588,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tick?.invalidate()
         HotKeys.shared.removeAll()
         badge.hide()
-        NSSound(named: "Pop")?.play()
+        chime("Pop")
     }
 
     /// Runs a window action and keeps snap mode on for 10 more seconds.
@@ -508,29 +627,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func askColumns() {
+    private func showPicker() {
         guard AXIsProcessTrusted() else { askForAccessibility(); return }
-        let previous = NSWorkspace.shared.frontmostApplication
-        NSApp.activate(ignoringOtherApps: true)
-        let a = NSAlert()
-        a.messageText = "How many windows side by side?"
-        a.informativeText = "Type a number from 2 to 9."
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
-        field.stringValue = String(columns >= 2 ? columns : 3)
-        a.accessoryView = field
-        a.addButton(withTitle: "OK")
-        a.addButton(withTitle: "Cancel")
-        a.window.initialFirstResponder = field
-        let answer = a.runModal()
-        previous?.activate(options: [])
-        guard answer == .alertFirstButtonReturn else { return }
-        guard let n = Int(field.stringValue.trimmingCharacters(in: .whitespaces)), (2...9).contains(n) else {
-            alert("Snapperr", "Please type a number from 2 to 9.")
-            previous?.activate(options: [])
-            return
+        chime("Purr")
+        picker.onPick = { [weak self] n in
+            self?.columns = n
+            self?.startSnapMode(sound: nil)   // the picker sound already played
         }
-        columns = n
-        startSnapMode(say: "\(n) columns")
+        picker.show()
     }
 
     // MARK: permissions and login item

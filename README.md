@@ -12,8 +12,8 @@ Snapperr's keys only work in **snap mode**, so they never get in the way of your
 
 | Keys | What happens |
 |---|---|
-| Double-tap `Ctrl` | Snap mode on for 10 seconds. A voice says "Snap on" and a small popup counts down. |
-| Triple-tap `Ctrl` | Asks how many columns (2 to 9), then snap mode on. |
+| Double-tap `Ctrl` | Snap mode on for 10 seconds. A soft sound plays and a tiny counter shows at the top of the screen. |
+| Triple-tap `Ctrl` | A small list opens: pick 2 to 9 columns with `Up`/`Down` and `Enter` (starts on 4; `Esc` cancels). Then snap mode is on. |
 | `Esc` (or double-tap `Ctrl` again) | Snap mode off |
 
 While snap mode is on (every key press adds 10 more seconds):

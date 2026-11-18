@@ -9,8 +9,8 @@
 ;@Ahk2Exe-SetMainIcon ..\assets\snapperr.ico
 
 ; How it works:
-;   Double-tap Ctrl  -> snap mode ON for 10 seconds (voice says "Snap on").
-;   Triple-tap Ctrl  -> asks how many columns (2-9), then snap mode ON.
+;   Double-tap Ctrl  -> snap mode ON for 10 seconds (soft sound + tiny counter).
+;   Triple-tap Ctrl  -> column picker (2-9, arrows + Enter), then snap mode ON.
 ;   In snap mode (every press restarts the 10 s, Esc or double-tap Ctrl ends it):
 ;     Ctrl+Left / Down / Right  -> left / center / right third
 ;     Ctrl+L / Ctrl+;           -> left / right half
@@ -32,14 +32,15 @@ SnapOn := false
 SnapLeft := 0
 SplitCount := 0         ; columns chosen with a triple-tap (0 = not chosen yet)
 TapCount := 0
-Voice := ""
+PickerValue := 4
+PickerTarget := 0
 TargetWindow := 0      ; tests only: window to move instead of the active one
 
 ShortcutHelp := "
 (
 Turn on snap mode first:
   Double-tap Ctrl     snap mode on for 10 seconds
-  Triple-tap Ctrl     choose how many columns, then snap mode on
+  Triple-tap Ctrl     pick how many columns (arrows + Enter)
   Esc                 snap mode off
 
 Then:
@@ -59,6 +60,7 @@ if !A_IsCompiled && FileExist(A_ScriptDir "\..\assets\snapperr.ico")
     TraySetIcon(A_ScriptDir "\..\assets\snapperr.ico")
 BuildTrayMenu()
 Badge := MakeBadge()
+Picker := MakePicker()
 
 if A_IsCompiled {
     SetTimer(StartupUpdateCheck, -8000)                 ; once, 8 s after start
@@ -138,27 +140,37 @@ ManualUpdateCheck() {
 
 ; ---------- snap mode ----------
 
-; Small green popup at the top of the screen. It never takes focus and clicks pass through it.
+; Soft Windows sounds from one family: on (double-tap), columns (triple-tap), off.
+Chime(name) {
+    try SoundPlay(A_WinDir "\Media\" name ".wav")
+}
+
+; Tiny, see-through counter at the top of the screen. Never takes focus; clicks pass through.
 MakeBadge() {
     g := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000020")   ; no-activate + click-through
-    g.BackColor := "0B6B4A"
-    g.MarginX := 18, g.MarginY := 10
-    g.SetFont("s12 bold cFFFFFF", "Segoe UI")
-    g.headline := g.Add("Text", "w250 Center", "Snap on")
-    g.SetFont("s9 norm cD1FAE5", "Segoe UI")
-    g.hint := g.Add("Text", "w250 Center", "")
+    g.BackColor := "0B2E22"
+    g.MarginX := 10, g.MarginY := 3
+    g.SetFont("s9 c86EFAC", "Segoe UI")
+    g.label := g.Add("Text", "w92 Center", "")
     return g
 }
 
 UpdateBadge() {
-    Badge.headline.Text := "Snap on  ·  " SnapLeft " s"
-    Badge.hint.Text := SplitCount
-        ? "Ctrl + 1 to " SplitCount " = column   ·   Esc = off"
-        : "Ctrl + arrows   ·   Esc = off"
+    Badge.label.Text := (SplitCount ? "● " SplitCount " cols  " : "● snap  ") SnapLeft
 }
 
 ShowBadge() {
     UpdateBadge()
+    MonitorGetWorkArea(ActiveMonitor(), &l, &t, &r)
+    Badge.Show("NoActivate Hide AutoSize")
+    Badge.GetPos(, , &bw)
+    Badge.Show("NoActivate x" Round((l + r - bw) / 2) " y" (t + 8))
+    WinSetTransparent(190, Badge.Hwnd)
+    RoundCorners(Badge.Hwnd)
+}
+
+; Monitor that holds the middle of the active window (primary if none).
+ActiveMonitor() {
     mon := MonitorGetPrimary()
     if WinExist("A") {
         WinGetPos(&wx, &wy, &ww, &wh, "A")
@@ -168,27 +180,19 @@ ShowBadge() {
                 mon := A_Index
         }
     }
-    MonitorGetWorkArea(mon, &l, &t, &r)
-    Badge.Show("NoActivate Hide AutoSize")
-    Badge.GetPos(, , &bw)
-    Badge.Show("NoActivate x" Round((l + r - bw) / 2) " y" (t + 24))
-    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", Badge.Hwnd, "int", 33, "int*", 2, "int", 4)  ; round corners
+    return mon
 }
 
-Say(text) {
-    global Voice
-    try {
-        if !Voice
-            Voice := ComObject("SAPI.SpVoice")
-        Voice.Speak(text, 3)   ; async + stop anything still speaking
-    }
+RoundCorners(hwnd) {
+    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 33, "int*", 2, "int", 4)
 }
 
-StartSnapMode(spoken := "Snap on") {
+StartSnapMode(sound := "Speech On") {
     global SnapOn, SnapLeft
     SnapOn := true
     SnapLeft := SnapSeconds
-    Say(spoken)
+    if sound
+        Chime(sound)
     ShowBadge()
     SetTimer(SnapTick, 1000)
 }
@@ -216,7 +220,7 @@ EndSnapMode() {
     SnapOn := false
     SetTimer(SnapTick, 0)
     Badge.Hide()
-    try SoundPlay(A_WinDir "\Media\Speech Off.wav")
+    Chime("Speech Off")
 }
 
 ; Ctrl taps: counts quick Ctrl presses with no other key in between.
@@ -239,24 +243,76 @@ FinishTaps() {
     if taps = 2
         SnapOn ? EndSnapMode() : StartSnapMode()
     else if taps >= 3
-        AskColumns()
+        ShowPicker()
 }
 
-AskColumns() {
-    global SplitCount
-    target := WinExist("A")
-    answer := InputBox("How many windows side by side? (2 to 9)", "Snapperr columns", "w300 h130", SplitCount ? SplitCount : 3)
-    if target
-        try WinActivate(target)
-    if answer.Result != "OK"
-        return
-    n := Trim(answer.Value)
-    if !(n ~= "^[2-9]$") {
-        TrayTip("Please type a number from 2 to 9.", "Snapperr")
-        return
+; ---------- column picker (triple-tap Ctrl) ----------
+; A small list 2..9. Up/Down move, Enter picks, Esc cancels. Starts on 4.
+; Typing 2-9 or clicking a row picks it straight away.
+
+MakePicker() {
+    g := Gui("+AlwaysOnTop -Caption +ToolWindow")
+    g.BackColor := "0B1A14"
+    g.MarginX := 10, g.MarginY := 10
+    g.SetFont("s9 c6EE7B7", "Segoe UI")
+    g.Add("Text", "w200 Center", "Columns")
+    g.rows := []
+    g.SetFont("s11 cD1FAE5", "Segoe UI")
+    Loop 8 {
+        n := A_Index + 1
+        bars := ""
+        Loop n
+            bars .= "▮"
+        row := g.Add("Text", "w200 h30 y+2 0x200 Background0B1A14", "    " n "      " bars)   ; 0x200 = centered vertically
+        row.OnEvent("Click", PickerClicked.Bind(n))
+        g.rows.Push(row)
     }
-    SplitCount := Integer(n)
-    StartSnapMode(n " columns")
+    g.SetFont("s8 c5F8F7A", "Segoe UI")
+    g.Add("Text", "w200 Center y+8", "↑ ↓ choose   ·   Enter   ·   Esc")
+    return g
+}
+
+PickerClicked(n, *) {
+    PickerSelect(n)
+    PickerChoose()
+}
+
+ShowPicker() {
+    global PickerTarget
+    PickerTarget := WinExist("A")
+    Chime("Speech Disambiguation")
+    PickerSelect(4)
+    MonitorGetWorkArea(ActiveMonitor(), &l, &t, &r, &b)
+    Picker.Show("Hide AutoSize")
+    Picker.GetPos(, , &pw, &ph)
+    Picker.Show("x" Round((l + r - pw) / 2) " y" Round((t + b - ph) / 2))
+    RoundCorners(Picker.Hwnd)
+    try WinActivate(Picker.Hwnd)
+}
+
+PickerSelect(n) {
+    global PickerValue
+    PickerValue := Min(9, Max(2, n))
+    for i, row in Picker.rows {
+        on := (i + 1 = PickerValue)
+        row.Opt(on ? "+Background10B981" : "+Background0B1A14")
+        row.SetFont(on ? "bold c04130C" : "norm cD1FAE5")
+    }
+}
+
+PickerMove(delta) => PickerSelect(PickerValue + delta)
+
+PickerChoose() {
+    global SplitCount
+    PickerClose()
+    SplitCount := PickerValue
+    StartSnapMode("")   ; the triple-tap sound already played
+}
+
+PickerClose() {
+    Picker.Hide()
+    if PickerTarget
+        try WinActivate(PickerTarget)
 }
 
 ; ---------- moving windows ----------
@@ -292,7 +348,7 @@ SnapWindow(xRatio, widthRatio) {
 PrepareWindow() {
     KeepSnapModeOn()
     win := TargetWindow ? TargetWindow : WinExist("A")
-    if !win || win = Badge.Hwnd
+    if !win || win = Badge.Hwnd || win = Picker.Hwnd
         return 0
     if WinGetMinMax(win) != 0
         WinRestore(win)
@@ -319,6 +375,21 @@ SnapColumn(k) => SnapWindow((k - 1) / SplitCount, 1 / SplitCount)
 
 ~LControl Up::
 ~RControl Up::CtrlTapped()
+
+#HotIf WinActive("ahk_id " Picker.Hwnd)
+Up::PickerMove(-1)
+Down::PickerMove(1)
+Enter::
+NumpadEnter::PickerChoose()
+Esc::PickerClose()
+2::
+3::
+4::
+5::
+6::
+7::
+8::
+9::PickerClicked(Integer(ThisHotkey))
 
 #HotIf SnapOn
 Esc::EndSnapMode()

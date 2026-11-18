@@ -17,7 +17,6 @@ Pos() {
 }
 Near(a, b) => Abs(a - b) <= 16
 
-Voice := {Speak: (*) => 0}   ; stay quiet during tests
 TestWin := Gui("+Resize", "SnapperrTestWindow")
 TestWin.Show("x300 y200 w500 h400")
 TargetWindow := TestWin.Hwnd   ; no one is at the screen in CI, so nothing can be "active"
@@ -74,13 +73,30 @@ Check("Esc handler turns it off", !SnapOn)
 TapCount := 1, FinishTaps()
 Check("single tap does nothing", !SnapOn)
 
-SetTimer(() => (WinWait("Snapperr columns", , 3) ? (ControlSetText("5", "Edit1"), ControlClick("Button1")) : 0), -300)
 TapCount := 3, FinishTaps()
-Check("triple tap asks for columns and turns snap mode on", SplitCount = 5 && SnapOn, SplitCount)
+Check("triple tap opens the column picker", DllCall("IsWindowVisible", "ptr", Picker.Hwnd))
+Check("picker starts on 4", PickerValue = 4)
+PickerMove(-1)
+Check("Up selects 3", PickerValue = 3)
+Loop 10
+    PickerMove(1)
+Check("Down stops at 9", PickerValue = 9)
+Loop 10
+    PickerMove(-1)
+Check("Up stops at 2", PickerValue = 2)
+PickerMove(1), PickerMove(1), PickerMove(1)
+PickerChoose()
+Check("Enter picks 5 columns and turns snap mode on", SplitCount = 5 && SnapOn && !DllCall("IsWindowVisible", "ptr", Picker.Hwnd), SplitCount)
+Check("counter shows the columns", InStr(Badge.label.Text, "5 cols"), Badge.label.Text)
 EndSnapMode()
-SetTimer(() => (WinWait("Snapperr columns", , 3) ? (ControlSetText("12", "Edit1"), ControlClick("Button1")) : 0), -300)
 TapCount := 3, FinishTaps()
-Check("bad number is refused", SplitCount = 5 && !SnapOn)
+Check("picker opens on 4 again", PickerValue = 4)
+PickerClose()
+Check("Esc closes the picker without changes", SplitCount = 5 && !SnapOn && !DllCall("IsWindowVisible", "ptr", Picker.Hwnd))
+TapCount := 3, FinishTaps()
+PickerClicked(7)
+Check("typing or clicking 7 picks 7", SplitCount = 7 && SnapOn)
+EndSnapMode()
 
 FileAppend(Fails ? Fails " test(s) failed`n" : "All tests passed`n", "*")
 ExitApp(Fails ? 1 : 0)
