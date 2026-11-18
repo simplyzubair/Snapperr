@@ -1,0 +1,95 @@
+# Builds Windows (.exe) and Mac (.dmg) on every push.
+# On main, when VERSION has a number with no release yet, it publishes release v<VERSION>.
+# Installed apps then see the new release and offer to update.
+name: Build and release
+
+on:
+  push:
+    paths-ignore: ["**.md", "website/**", "scripts/deploy-website.sh", "deploy/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get build tools (AutoHotkey, Ahk2Exe, Inno Setup)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v2.0.31 -R AutoHotkey/AutoHotkey -p "AutoHotkey_2.0.31.zip" -D tools/dl
+          gh release download Ahk2Exe1.1.37.02a2 -R AutoHotkey/Ahk2Exe -p "Ahk2Exe1.1.37.02a2.zip" -D tools/dl
+          gh release download is-7_1_1 -R jrsoftware/issrc -p "innosetup-7.1.1-x64.exe" -D tools/dl
+          Expand-Archive tools/dl/AutoHotkey_2.0.31.zip tools/AutoHotkey
+          Expand-Archive tools/dl/Ahk2Exe1.1.37.02a2.zip tools/Ahk2Exe
+          $p = Start-Process tools/dl/innosetup-7.1.1-x64.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER',"/DIR=$PWD\tools\InnoSetup" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Inno Setup install failed" }
+      - name: Tests
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($t in "tests\updater_test.ahk", "tests\snap_test.ahk") {
+            $p = Start-Process tools\AutoHotkey\AutoHotkey64.exe -ArgumentList "/ErrorStdOut", $t -RedirectStandardOutput out.txt -PassThru -NoNewWindow
+            $null = $p.Handle
+            if (-not $p.WaitForExit(60000)) { $p.Kill(); "TIMEOUT in $t"; $failed = $true }
+            Get-Content out.txt
+            if ($p.ExitCode -ne 0) { $failed = $true }
+          }
+          if ($failed) { throw "Tests failed" }
+      - name: Build
+        shell: pwsh
+        run: ./build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/Snapperr-Setup-*.exe
+          if-no-files-found: error
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: bash mac/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: dist/Snapperr-*-mac.dmg
+          if-no-files-found: error
+
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Publish release (only if this version is new)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(tr -d ' \r\n' < VERSION)
+          if gh release view "v$V" >/dev/null 2>&1; then
+            echo "v$V is already released. Change VERSION to publish a new one."
+            exit 0
+          fi
+          ls -l out
+          gh release create "v$V" "out/Snapperr-Setup-$V.exe" "out/Snapperr-$V-mac.dmg" \
+            --title "Snapperr $V" --target "$GITHUB_SHA" \
+            --notes "Download from https://snapperr.skillsgeek.com
+
+          - **Windows:** Snapperr-Setup-$V.exe
+          - **Mac:** Snapperr-$V-mac.dmg (Apple Silicon and Intel)
+
+          Already installed? Snapperr finds this update by itself and asks before installing."

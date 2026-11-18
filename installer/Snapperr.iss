@@ -18,6 +18,7 @@ PrivilegesRequired=lowest
 OutputDir=..\dist
 OutputBaseFilename=Snapperr-Setup-{#AppVersion}
 UninstallDisplayIcon={app}\Snapperr.exe
+SetupIconFile=..\assets\snapperr.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

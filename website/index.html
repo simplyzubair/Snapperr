@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src https://api.github.com; img-src 'self'">
+<title>Snapperr: snap windows with your keyboard</title>
+<meta name="description" content="Snapperr puts any window into thirds, halves or columns with one key. Move and resize windows 20 px at a time. Free for Windows and Mac.">
+<meta name="theme-color" content="#08120e">
+<link rel="icon" href="icon.png" type="image/png">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+  :root { --bg: #08120e; --card: rgba(16, 30, 24, 0.85); --line: rgba(110, 231, 183, 0.16); --text: #e6f2ec; --muted: #9db5aa; --accent: #34d399; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    color: var(--text); padding: 40px 16px;
+    background: radial-gradient(720px 380px at 15% -10%, rgba(16, 185, 129, 0.26), transparent 70%), radial-gradient(620px 320px at 110% 5%, rgba(52, 211, 153, 0.12), transparent 70%), var(--bg);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { width: 100%; max-width: 600px; text-align: center; }
+  .logo { width: 112px; height: 112px; margin: 0 auto 18px; display: block; filter: drop-shadow(0 14px 30px rgba(16, 185, 129, 0.45)); }
+  h1 { margin: 0 0 4px; font-size: 2.4rem; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .tag { color: var(--muted); margin: 0 0 28px; }
+  .cards { display: grid; gap: 14px; }
+  .card {
+    display: flex; align-items: center; gap: 16px; text-align: left; text-decoration: none;
+    background: var(--card); color: var(--text); border: 1px solid var(--line);
+    border-radius: 14px; padding: 18px 20px; transition: border-color .15s, transform .15s;
+  }
+  a.card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .icon { width: 36px; height: 36px; flex-shrink: 0; fill: var(--text); }
+  .label { font-weight: 600; }
+  .sub { color: var(--muted); font-size: .9rem; }
+  .btn {
+    margin-left: auto; background: linear-gradient(135deg, #4ade80, #059669 70%); color: #03140c;
+    border-radius: 999px; padding: 6px 14px; font-size: .9rem; font-weight: 700; white-space: nowrap;
+  }
+  .box { margin-top: 14px; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; }
+  .box h2 { margin: 0 0 10px; font-size: 1rem; }
+  .box ol { margin: 0; padding-left: 20px; color: var(--muted); }
+  .box li { margin-bottom: 4px; }
+  .box p { margin: 10px 0 0; color: var(--muted); font-size: .9rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  td { padding: 6px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  tr:first-child td { border-top: 0; }
+  td:first-child { white-space: nowrap; padding-right: 14px; }
+  td:last-child { color: var(--muted); }
+  kbd {
+    display: inline-block; font: 600 .78rem ui-monospace, Menlo, Consolas, monospace; color: var(--text);
+    background: rgba(110, 231, 183, 0.12); border: 1px solid var(--line); border-bottom-width: 2px;
+    border-radius: 6px; padding: 1px 6px; margin: 1px 0;
+  }
+  code { font: .8rem ui-monospace, Menlo, Consolas, monospace; background: rgba(110, 231, 183, 0.12); padding: 1px 5px; border-radius: 5px; word-break: break-all; color: var(--text); }
+  footer { margin-top: 24px; color: var(--muted); font-size: .85rem; }
+  footer a { color: var(--accent); }
+  @media (max-width: 480px) { td:first-child { white-space: normal; } h1 { font-size: 2rem; } }
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="icon.png" alt="Snapperr logo">
+  <h1>Snapp<span>err</span></h1>
+  <p class="tag" id="version">Snap any window into place with your keyboard. Free for Windows and Mac.</p>
+
+  <div class="cards">
+    <a class="card" id="download-windows" href="https://github.com/simplyzubair/Snapperr/releases/latest">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3zM11.5 4.3 21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>
+      <span><span class="label">Windows</span><br><span class="sub">Windows 10 and 11 (.exe), updates itself</span></span>
+      <span class="btn">Download</span>
+    </a>
+    <a class="card" id="download-mac" href="https://github.com/simplyzubair/Snapperr/releases/latest">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.6 2.1-3.7-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.7.9-.8 0-2-.9-3.2-.8-1.7 0-3.2 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.5-1-2.3-3.9zM14 5.2c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg>
+      <span><span class="label">Mac</span><br><span class="sub">macOS 11 or newer, Apple Silicon and Intel (.dmg), preview</span></span>
+      <span class="btn">Download</span>
+    </a>
+  </div>
+
+  <div class="box">
+    <h2>How it works</h2>
+    <table>
+      <tr><td><kbd>Ctrl</kbd> <kbd>Ctrl</kbd></td><td>Double-tap Ctrl: snap mode turns on for 10 seconds. A voice says “Snap on”.</td></tr>
+      <tr><td><kbd>Ctrl</kbd> <kbd>Ctrl</kbd> <kbd>Ctrl</kbd></td><td>Triple-tap Ctrl: choose how many columns (2 to 9).</td></tr>
+      <tr><td><kbd>Ctrl</kbd> + <kbd>←</kbd> <kbd>↓</kbd> <kbd>→</kbd></td><td>Left, center or right third</td></tr>
+      <tr><td><kbd>Ctrl</kbd> + <kbd>L</kbd> / <kbd>;</kbd></td><td>Left or right half</td></tr>
+      <tr><td><kbd>Ctrl</kbd> + <kbd>1</kbd> … <kbd>9</kbd></td><td>Put the window in that column, counting from the left</td></tr>
+      <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + arrow</td><td>Move the window 20 px. Size stays the same.</td></tr>
+      <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Alt</kbd> + arrow</td><td>Resize 20 px. Position stays the same.</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Snap mode off</td></tr>
+    </table>
+    <p>Every key press keeps snap mode on for 10 more seconds. When it is off, these keys work normally in your apps. On Mac, use Control and Option.</p>
+  </div>
+
+  <div class="box">
+    <h2>Install on Windows</h2>
+    <ol>
+      <li>Run the installer. No admin rights needed. If Windows warns you, click <b>More info → Run anyway</b>.</li>
+      <li>Snapperr starts right away and every time you sign in. Its icon sits in the tray.</li>
+      <li>When a new version is out, Snapperr asks at start. You can also right-click the tray icon → <b>Update</b>.</li>
+    </ol>
+  </div>
+
+  <div class="box">
+    <h2>Install on Mac</h2>
+    <ol>
+      <li>Open the .dmg and drag <b>Snapperr</b> into <b>Applications</b>.</li>
+      <li>Snapperr is not signed by Apple, so macOS blocks the first start. Open <b>System Settings → Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b>.</li>
+      <li>If macOS says the app is “damaged”, run this once in Terminal: <code>xattr -dr com.apple.quarantine /Applications/Snapperr.app</code></li>
+      <li>Allow <b>Accessibility</b> when Snapperr asks. macOS needs this before an app can move windows.</li>
+      <li>If <kbd>⌃</kbd> + <kbd>←</kbd> switches desktops instead, turn that off in <b>System Settings → Keyboard → Keyboard Shortcuts → Mission Control</b>.</li>
+    </ol>
+  </div>
+
+  <footer>Free and open source · <a href="https://github.com/simplyzubair/Snapperr">GitHub</a></footer>
+</main>
+<script src="version.js"></script>
+</body>
+</html>
