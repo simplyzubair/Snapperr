@@ -2,3 +2,5 @@ tools/
 build/
 .env*
 !.env.example
+dist/*
+!dist/Snapperr-Setup-1.0.0.exe
