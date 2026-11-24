@@ -14,6 +14,7 @@
 ;   In snap mode (every press restarts the 10 s, Esc or double-tap Ctrl ends it):
 ;     Ctrl+Left / Down / Right  -> left / center / right third
 ;     Ctrl+L / Ctrl+;           -> left / right half
+;     Ctrl+F                    -> full screen (whole work area)
 ;     Ctrl+Shift+Arrow          -> move window 20 px (size stays the same)
 ;     Ctrl+Shift+Alt+Arrow      -> resize window 20 px (position stays the same)
 ;     Ctrl+1 ... Ctrl+9         -> column 1..N from the left (after a triple-tap)
@@ -46,6 +47,7 @@ Turn on snap mode first:
 Then:
   Ctrl + Left / Down / Right     left / center / right third
   Ctrl + L  /  Ctrl + ;          left / right half
+  Ctrl + F                       full screen
   Ctrl + Shift + Arrow           move window 20 px
   Ctrl + Shift + Alt + Arrow     resize window 20 px
                                  (Right/Down = bigger, Left/Up = smaller)
@@ -64,7 +66,7 @@ Picker := MakePicker()
 
 if A_IsCompiled {
     SetTimer(StartupUpdateCheck, -8000)                 ; once, 8 s after start
-    SetTimer(BackgroundUpdateCheck, 6 * 60 * 60 * 1000) ; then every 6 hours
+    SetTimer(BackgroundUpdateCheck, 60 * 60 * 1000)     ; then every hour
 }
 
 ; ---------- tray menu ----------
@@ -120,7 +122,7 @@ BackgroundUpdateCheck() {
     before := PendingUpdate ? PendingUpdate["version"] : ""
     try {
         if FindUpdate() && PendingUpdate["version"] != before
-            TrayTip("Snapperr " PendingUpdate["version"] " is available. Right-click the tray icon to update.", "Snapperr")
+            AskToUpdate()   ; once per new version; "No" keeps it in the tray menu
     }
 }
 
@@ -399,6 +401,7 @@ Esc::EndSnapMode()
 ^Right::SnapWindow(2/3, 1/3)
 ^l::SnapWindow(0, 1/2)
 ^`;::SnapWindow(1/2, 1/2)
+^f::SnapWindow(0, 1)
 
 ^+Left::MoveWindow(-Step, 0)
 ^+Right::MoveWindow(Step, 0)

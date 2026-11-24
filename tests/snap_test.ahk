@@ -38,6 +38,8 @@ SnapWindow(2/3, 1/3), q := Pos()
 Check("right third", Near(q.x + q.w, r), q.x "," q.w)
 SnapWindow(1/2, 1/2), q := Pos()
 Check("right half", Near(q.x, l + W / 2) && Near(q.w, W / 2), q.x "," q.w)
+SnapWindow(0, 1), q := Pos()
+Check("full screen (Ctrl+F)", Near(q.x, l) && Near(q.w, W) && Near(q.h, b - t), q.x "," q.w "," q.h)
 
 p := Pos(), MoveWindow(Step, 0), q := Pos()
 Check("move right 20 px, size same", q.x - p.x = 20 && q.y = p.y && q.w = p.w && q.h = p.h)

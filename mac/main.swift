@@ -4,7 +4,7 @@
 // Double-tap Control  -> snap mode on for 10 s (soft sound + tiny counter)
 // Triple-tap Control  -> column picker (2-9, arrows + Enter), then snap mode on
 // In snap mode (each key restarts the 10 s, Esc or double-tap Control ends it):
-//   Control+Left/Down/Right  thirds, Control+L / Control+; halves
+//   Control+Left/Down/Right  thirds, Control+L / Control+; halves, Control+F full screen
 //   Control+Shift+Arrow      move 20 px, Control+Shift+Option+Arrow  resize 20 px
 //   Control+1 ... Control+9  column 1..N from the left
 // Outside snap mode Snapperr does not take any keys.
@@ -496,7 +496,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !AXIsProcessTrusted() { askForAccessibility() }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) { self.checkForUpdate(manual: false) }
-        Timer.scheduledTimer(withTimeInterval: 6 * 60 * 60, repeats: true) { [weak self] _ in self?.checkForUpdate(manual: false, quiet: true) }
+        Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { [weak self] _ in self?.checkForUpdate(manual: false) }
     }
 
     // MARK: menu
@@ -544,6 +544,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Then:
           ⌃ ← / ↓ / →          left / center / right third
           ⌃ L  /  ⌃ ;          left / right half
+          ⌃ F                  full screen
           ⌃ ⇧ Arrow            move window 20 px
           ⌃ ⇧ ⌥ Arrow          resize window 20 px (→ ↓ bigger, ← ↑ smaller)
           ⌃ 1 … ⌃ 9            put window in that column (from the left)
@@ -611,6 +612,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hk.add(kVK_RightArrow, ctrl, act { WindowMover.snap(x: 2.0 / 3, width: 1.0 / 3) })
         hk.add(kVK_ANSI_L, ctrl, act { WindowMover.snap(x: 0, width: 0.5) })
         hk.add(kVK_ANSI_Semicolon, ctrl, act { WindowMover.snap(x: 0.5, width: 0.5) })
+        hk.add(kVK_ANSI_F, ctrl, act { WindowMover.snap(x: 0, width: 1) })
 
         let arrows: [(Int, CGFloat, CGFloat)] = [(kVK_LeftArrow, -1, 0), (kVK_RightArrow, 1, 0), (kVK_UpArrow, 0, -1), (kVK_DownArrow, 0, 1)]
         for (key, x, y) in arrows {
@@ -675,7 +677,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: updates
 
-    private func checkForUpdate(manual: Bool, quiet: Bool = false) {
+    private func checkForUpdate(manual: Bool) {
         Updater.check { [weak self] result in
             guard let self else { return }
             switch result {
@@ -688,7 +690,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.pendingUpdate = release
                 self.buildMenu()
                 self.statusItem.button?.toolTip = "Snapperr \(appVersion) (update \(release.version) available)"
-                if manual || (!quiet && isNew) { self.askToUpdate() }
+                if manual || isNew { self.askToUpdate() }
             }
         }
     }

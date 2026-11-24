@@ -22,6 +22,7 @@ While snap mode is on (every key press adds 10 more seconds):
 |---|---|
 | `Ctrl + Left` / `Down` / `Right` | left / center / right third |
 | `Ctrl + L` / `Ctrl + ;` | left / right half |
+| `Ctrl + F` | full screen |
 | `Ctrl + 1` … `Ctrl + 9` | column 1 … N from the left (after a triple-tap) |
 | `Ctrl + Shift + Arrow` | moves 20 px (size stays the same) |
 | `Ctrl + Shift + Alt + Arrow` | resizes 20 px: Right/Down bigger, Left/Up smaller (position stays the same) |
@@ -36,9 +37,9 @@ Hold the move/resize keys down to keep going. Works on the monitor the window is
 
 ## Updates
 
-Snapperr checks GitHub for a new version 8 seconds after it starts and every 6 hours.
+Snapperr checks GitHub for a new version 8 seconds after it starts and then every hour.
 
-- At start it asks **"Update now?"**. Yes downloads, checks and installs it, then restarts Snapperr.
+- When it finds a new version it asks **"Update now?"**. Yes downloads, checks and installs it, then restarts Snapperr.
 - Or right-click the tray icon (Mac: click the menu bar icon) → **Update to x.y.z** / **Check for updates**.
 - Mac: after an update, macOS may ask for Accessibility access again (the app is not signed by Apple).
 
