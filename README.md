@@ -33,6 +33,8 @@ Hold the move/resize keys down to keep going. Works on the monitor the window is
 
 **Windows:** download `Snapperr-Setup-<version>.exe` from the website and run it. No admin rights needed. It starts when you sign in.
 
+**Windows, from the command line:** in PowerShell run `irm https://snapperr.skillsgeek.com/install.ps1 | iex`. It adds the `snapperr` command (in `%LOCALAPPDATA%\Programs\Snapperr-cli`) and installs the app. Then `snapperr update` updates it and `snapperr version` shows the installed and newest version. Source: `cli/`.
+
 **Mac (preview):** open `Snapperr-<version>-mac.dmg` and drag Snapperr into Applications. It is not signed by Apple: the first time, go to **System Settings → Privacy & Security → Open Anyway**. Then allow **Accessibility** when asked. If `Ctrl + Left/Right` switches desktops, turn that off in **System Settings → Keyboard → Keyboard Shortcuts → Mission Control**.
 
 ## Updates

@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ssh co 'mkdir -p /var/www/snapperr'
-for f in website/index.html website/version.js website/icon.png; do
+for f in website/index.html website/version.js website/icon.png cli/install.ps1 cli/snapperr.ps1; do
   ssh co "cat > /var/www/snapperr/$(basename "$f")" < "$f"
 done
 ssh co 'chmod 644 /var/www/snapperr/* && nginx -t && systemctl reload nginx'
